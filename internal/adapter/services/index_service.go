@@ -32,6 +32,7 @@ const (
 	SiatEntidadFinanciera  SiatService = "ServicioFacturacionEntidadFinanciera"
 	SiatBoletoAereo        SiatService = "ServicioFacturacionBoletoAereo"
 	SiatRecepcionCompras   SiatService = "ServicioRecepcionCompras"
+	SiatHidrocarburos      SiatService = "ServicioFacturacionHidrocarburos"
 )
 
 // fullURL construye la URL completa para acceder a un servicio específico del SIAT,

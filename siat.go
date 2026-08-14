@@ -28,6 +28,7 @@ type SiatServices struct {
 	entidadFinanciera  ports.FacturacionService
 	boletoAereo        ports.SiatBoletoAereoService
 	recepcionCompras   ports.SiatRecepcionComprasService
+	hidrocarburos      ports.FacturacionService
 }
 
 // Config retorna la configuración actual del cliente.
@@ -96,6 +97,16 @@ func (s *SiatServices) RecepcionCompras() ports.SiatRecepcionComprasService {
 	return s.recepcionCompras
 }
 
+// Hidrocarburos retorna el servicio para los sectores de Hidrocarburos Alcanzada y No
+// Alcanzada por el IEHD (Sectores 19 y 38). Expone el contrato genérico FacturacionService
+// (recepción/anulación/reversión individual y en paquete); no incluye las operaciones
+// exclusivas de contratos YPFB (recepcionMasivaContratosYPFB,
+// validacionRecepcionMasivaFacturaYPFB) del WSDL, que quedan fuera del alcance de este SDK
+// por ahora al no tener representación en ningún otro servicio tampoco.
+func (s *SiatServices) Hidrocarburos() ports.FacturacionService {
+	return s.hidrocarburos
+}
+
 // New crea e inicializa una nueva instancia de SiatServices usando la configuración global.
 func New(config Config) (*SiatServices, error) {
 	if err := validateConfig(config); err != nil {
@@ -160,6 +171,10 @@ func New(config Config) (*SiatServices, error) {
 	if err != nil {
 		return nil, err
 	}
+	hidrocarburos, err := services.NewFacturacionService(baseUrl, httpClient, config, services.SiatHidrocarburos)
+	if err != nil {
+		return nil, err
+	}
 
 	return &SiatServices{
 		config:             config,
@@ -175,6 +190,7 @@ func New(config Config) (*SiatServices, error) {
 		entidadFinanciera:  entidadFinanciera,
 		boletoAereo:        boletoAereo,
 		recepcionCompras:   recepcionCompras,
+		hidrocarburos:      hidrocarburos,
 	}, nil
 }
 

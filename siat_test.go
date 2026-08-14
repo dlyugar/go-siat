@@ -52,6 +52,7 @@ func TestNew(t *testing.T) {
 		services, err := siat.New(cfg)
 		assert.NoError(t, err)
 		assert.NotNil(t, services)
+		assert.NotNil(t, services.Hidrocarburos())
 	})
 
 	models.NewCuisBuilder().Build()
