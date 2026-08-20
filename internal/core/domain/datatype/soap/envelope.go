@@ -8,6 +8,11 @@ type Envelope[T any] struct {
 	XMLName      xml.Name `xml:"soapenv:Envelope"`
 	XmlnsSoapenv string   `xml:"xmlns:soapenv,attr"`
 	XmlnsNs      string   `xml:"xmlns:ns,attr"`
+	// XmlnsXsi declara el prefijo "xsi" usado por Nilable[T].MarshalXML para
+	// emitir xsi:nil="true" en campos opcionales vacíos. Sin esta declaración
+	// el SIAT rechaza el XML con "Undeclared namespace prefix xsi" en cuanto
+	// cualquier campo Nilable queda nil (ej. RegistroEventoSignificativo).
+	XmlnsXsi string `xml:"xmlns:xsi,attr"`
 	// Usamos un puntero para omitir la etiqueta completamente si el Header está vacío
 	Header *Header         `xml:"soapenv:Header,omitempty"`
 	Body   EnvelopeBody[T] `xml:"soapenv:Body"`
