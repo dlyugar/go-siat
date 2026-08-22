@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"github.com/ron86i/go-siat/v2/internal/core/domain/datatype"
 	"github.com/ron86i/go-siat/v2/internal/core/domain/siat/operaciones"
 )
 
@@ -305,12 +306,12 @@ func (b *registroEventoSignificativoBuilder) WithDescripcion(desc string) *regis
 }
 
 func (b *registroEventoSignificativoBuilder) WithFechaInicio(t time.Time) *registroEventoSignificativoBuilder {
-	b.request.SolicitudEventoSignificativo.FechaHoraInicioEvento = t
+	b.request.SolicitudEventoSignificativo.FechaHoraInicioEvento = datatype.NewTimeSiat(t)
 	return b
 }
 
 func (b *registroEventoSignificativoBuilder) WithFechaFin(t time.Time) *registroEventoSignificativoBuilder {
-	b.request.SolicitudEventoSignificativo.FechaHoraFinEvento = t
+	b.request.SolicitudEventoSignificativo.FechaHoraFinEvento = datatype.NewTimeSiat(t)
 	return b
 }
 

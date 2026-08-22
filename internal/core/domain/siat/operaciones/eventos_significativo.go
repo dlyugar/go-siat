@@ -3,6 +3,8 @@ package operaciones
 import (
 	"encoding/xml"
 	"time"
+
+	"github.com/ron86i/go-siat/v2/internal/core/domain/datatype"
 )
 
 // RegistroEventoSignificativo es el wrapper para registrar un evento
@@ -21,10 +23,16 @@ type SolicitudEventoSignificativo struct {
 	Cufd                  string    `xml:"cufd" json:"cufd"`
 	CufdEvento            string    `xml:"cufdEvento" json:"cufdEvento"`
 	Cuis                  string    `xml:"cuis" json:"cuis"`
-	Descripcion           string    `xml:"descripcion" json:"descripcion"`
-	FechaHoraFinEvento    time.Time `xml:"fechaHoraFinEvento" json:"fechaHoraFinEvento"`
-	FechaHoraInicioEvento time.Time `xml:"fechaHoraInicioEvento" json:"fechaHoraInicioEvento"`
-	Nit                   int64     `xml:"nit" json:"nit"`
+	Descripcion           string            `xml:"descripcion" json:"descripcion"`
+	// [981] "RANGO DE FECHAS DE EVENTO SIGNIFICATIVO INVALIDO": time.Time simple se
+	// serializa por defecto en RFC3339 CON offset de huso ("...-04:00"), no en el
+	// formato bare "yyyy-MM-dd'T'HH:mm:ss.SSS" que el SIAT exige (ver doc oficial
+	// "Registro Evento Significativo") — el mismo formato que datatype.TimeSiat ya usa
+	// en el resto del SDK. Único lugar de este struct que se había quedado con time.Time
+	// plano en vez de TimeSiat.
+	FechaHoraFinEvento    datatype.TimeSiat `xml:"fechaHoraFinEvento" json:"fechaHoraFinEvento"`
+	FechaHoraInicioEvento datatype.TimeSiat `xml:"fechaHoraInicioEvento" json:"fechaHoraInicioEvento"`
+	Nit                   int64             `xml:"nit" json:"nit"`
 }
 
 // RegistroEventoSignificativoResponse es el wrapper para la respuesta de registro de evento
