@@ -9,6 +9,26 @@ import (
 
 const layoutSiat = "2006-01-02T15:04:05.000"
 
+// boliviaLocation es UTC-4 fijo (Bolivia no tiene horario de verano desde 1932).
+// FixedZone en vez de LoadLocation("America/La_Paz") para no depender de que la imagen
+// del contenedor traiga tzdata.
+//
+// El formato del SIAT no lleva huso horario: es reloj de pared de Bolivia, y punto. Antes
+// esta conversión no existía acá, así que el tipo formateaba/parseaba el reloj de pared del
+// time.Time tal cual — es decir, exigía que CADA quien lo usara ya viniera en hora boliviana.
+// Eso hacía dos daños:
+//
+//   - Al PARSEAR (sincronizarFechaHora): time.Parse sin zona asume UTC, así que la hora que
+//     el SIAT manda como local de Bolivia se leía como UTC y salía un Instant 4h atrasado.
+//     Java lo tomaba como "desfase de reloj" y arrastraba ese -4h a todo (visto real:
+//     "Desfase SIAT: -14400152ms"), dejando dos relojes distintos conviviendo en el sistema.
+//   - Al FORMATEAR: obligaba a cada call site a pre-convertir. Uno solo lo hacía
+//     (fechaEnvioSiat en el conector); el resto compensaba pasando instantes ya corridos.
+//
+// Con la conversión acá adentro, el resto del sistema maneja instantes REALES y la hora
+// boliviana existe únicamente en el cable hacia el SIAT, que es donde corresponde.
+var boliviaLocation = time.FixedZone("BOT", -4*60*60)
+
 // TimeSiat es un tipo personalizado que envuelve time.Time para manejar
 // la serialización y deserialización XML/JSON con el formato específico del SIAT ("2006-01-02T15:04:05.000").
 // Implementa las interfaces de marshaling para asegurar el formato requerido por el SIAT.
@@ -20,7 +40,7 @@ func (t TimeSiat) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if v.IsZero() {
 		return e.EncodeElement("", start)
 	}
-	return e.EncodeElement(v.Format(layoutSiat), start)
+	return e.EncodeElement(v.In(boliviaLocation).Format(layoutSiat), start)
 }
 
 // UnmarshalXML Decodificador de XML
@@ -34,7 +54,7 @@ func (t *TimeSiat) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 		return nil
 	}
 
-	elem, err := time.Parse(layoutSiat, s)
+	elem, err := time.ParseInLocation(layoutSiat, s, boliviaLocation)
 	if err != nil {
 		return err
 	}
@@ -49,7 +69,7 @@ func (t TimeSiat) MarshalJSON() ([]byte, error) {
 	if v.IsZero() {
 		return []byte("null"), nil
 	}
-	return []byte(fmt.Sprintf("\"%s\"", v.Format(layoutSiat))), nil
+	return []byte(fmt.Sprintf("\"%s\"", v.In(boliviaLocation).Format(layoutSiat))), nil
 }
 
 // UnmarshalJSON Decodificador de JSON
@@ -60,7 +80,7 @@ func (t *TimeSiat) UnmarshalJSON(data []byte) error {
 	}
 
 	s = strings.Trim(s, "\"")
-	elem, err := time.Parse(layoutSiat, s)
+	elem, err := time.ParseInLocation(layoutSiat, s, boliviaLocation)
 	if err != nil {
 		return err
 	}
@@ -82,7 +102,7 @@ func (t TimeSiat) String() string {
 	if v.IsZero() {
 		return ""
 	}
-	return v.Format(layoutSiat)
+	return v.In(boliviaLocation).Format(layoutSiat)
 }
 
 func NewTimeSiat(t time.Time) TimeSiat {
