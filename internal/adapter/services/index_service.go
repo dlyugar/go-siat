@@ -61,23 +61,65 @@ func buildRequest(req any) ([]byte, error) {
 }
 
 // parseSoapResponse procesa y valida una respuesta HTTP proveniente del servicio para extraer el contenido SOAP esperado.
+//
+// Los tres fallos de acá son de TRANSPORTE, no rechazos del SIAT: la petición ya salió y lo
+// que se rompió fue la respuesta. Devolverlos crudos los volvía no reintentables, porque
+// errors.IsRetryable() responde false para todo lo que no sea un *SiatError — así que un
+// parpadeo de red mataba la factura de forma permanente.
+//
+// Visto real el 2026-08-25: a las 19:08:40.486 se cortaron TODAS las conexiones en vuelo de
+// golpe (duraciones de 4 s a 27 s fallando en el mismo milisegundo) y 108 facturas de una
+// certificación quedaron RECHAZADA para siempre por un corte de un segundo del lado del SIAT.
+// 78 con "EOF" y 30 con "expected element type <Envelope> but have <html>".
+//
+// Envolverlos como error de red los hace reintentables. Es seguro porque el reintento no
+// reenvía a ciegas: el backend consulta antes con VerificacionEstadoFactura si el SIAT ya
+// tiene el CUF (ver FacturaYaEnSiatChecker) — un EOF es ambiguo por definición y la petición
+// pudo haberse procesado.
 func parseSoapResponse[T any](resp *http.Response) (*soap.EnvelopeResponse[T], error) {
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		// La conexión se cortó mientras leíamos: no sabemos si el SIAT llegó a procesar.
+		return nil, siatErrors.NewNetworkError("la conexión con el SIAT se cortó al leer la respuesta", err)
+	}
+
+	// Un status fuera de 2xx casi nunca trae un sobre SOAP: viene la página de error del
+	// gateway o del portal. Detectarlo acá da un mensaje que nombra la causa, en vez del
+	// confuso "expected element type <Envelope> but have <html>" que salía al intentar
+	// parsear un HTML como XML.
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		msg := fmt.Sprintf("el SIAT respondió HTTP %d (%s) en vez de un sobre SOAP",
+			resp.StatusCode, http.StatusText(resp.StatusCode))
+		// 401/403 no se arreglan reintentando: hace falta renovar credenciales.
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return nil, siatErrors.NewAuthError(msg)
+		}
+		return nil, siatErrors.NewNetworkError(msg, fmt.Errorf("cuerpo: %s", truncar(body, 200)))
 	}
 
 	var result soap.EnvelopeResponse[T]
 
 	// Intentar parsear la respuesta XML en la estructura de respuesta SOAP
-	err = xml.Unmarshal(body, &result)
-	if err != nil {
-		return nil, err
+	if err := xml.Unmarshal(body, &result); err != nil {
+		// 200 pero el cuerpo no es SOAP: típicamente una página de sesión/portal
+		// intercalada. Tampoco es un rechazo del SIAT, así que se reintenta.
+		return nil, siatErrors.NewNetworkError(
+			fmt.Sprintf("la respuesta del SIAT no es un sobre SOAP válido (cuerpo: %s)", truncar(body, 200)), err)
 	}
 
 	return &result, nil
+}
+
+// truncar acota el cuerpo que se adjunta al error: alcanza para reconocer si vino una página
+// de login, un 502 del gateway o basura, sin volcar una respuesta entera al log.
+func truncar(body []byte, max int) string {
+	s := strings.TrimSpace(string(body))
+	if len(s) > max {
+		return s[:max] + "…"
+	}
+	return s
 }
 
 // getInternalRequest desempaqueta la estructura de solicitud concreta desde una interfaz opaca
