@@ -257,8 +257,10 @@ func (b *consultaEventoSignificativoBuilder) WithCuis(cuis string) *consultaEven
 	return b
 }
 
+// WithFechaEvento mantiene time.Time en la API pública (es lo natural para el llamador) y
+// convierte adentro al tipo que serializa en el formato del SIAT.
 func (b *consultaEventoSignificativoBuilder) WithFechaEvento(fecha time.Time) *consultaEventoSignificativoBuilder {
-	b.request.SolicitudConsultaEvento.FechaEvento = fecha
+	b.request.SolicitudConsultaEvento.FechaEvento = datatype.TimeSiat(fecha)
 	return b
 }
 
