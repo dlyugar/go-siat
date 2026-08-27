@@ -159,6 +159,14 @@ type anulacionDocumentoAjusteBuilder struct {
 	request *documento_ajuste.AnulacionDocumentoAjuste
 }
 
+// La modalidad NO la inyecta injectFields (solo pone Nit, CodigoSistema y CodigoAmbiente,
+// pese a lo que dice el comentario de performSoapRequest), así que sin este setter la
+// anulación de nota de crédito/débito viajaba con codigoModalidad=0.
+func (b *anulacionDocumentoAjusteBuilder) WithCodigoModalidad(v int) *anulacionDocumentoAjusteBuilder {
+	b.request.SolicitudServicioAnulacionDocumentoAjuste.CodigoModalidad = v
+	return b
+}
+
 func (b *anulacionDocumentoAjusteBuilder) WithCodigoDocumentoSector(v int) *anulacionDocumentoAjusteBuilder {
 	b.request.SolicitudServicioAnulacionDocumentoAjuste.CodigoDocumentoSector = v
 	return b
