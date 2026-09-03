@@ -79,7 +79,11 @@ type SolicitudRecepcionCompras struct {
 	CantidadFacturas int               `xml:"cantidadFacturas" json:"cantidadFacturas"`
 	FechaEnvio       datatype.TimeSiat `xml:"fechaEnvio" json:"fechaEnvio"`
 	Gestion          int               `xml:"gestion" json:"gestion"`
-	HashArchivo      string            `xml:"hashArchivo" json:"hashArchivo"`
+	// El nombre del elemento es "hash", no "hashArchivo" — la doc oficial del SIN
+	// ("Recepción Paquete Compras") lo lista así, y con el tag equivocado el SIAT
+	// devuelve un genérico "[-1] Error inesperado" HTTP 200 en vez de un rechazo de
+	// validación: recibe el paquete, pero el hash no llega bajo el nombre que espera.
+	HashArchivo      string            `xml:"hash" json:"hashArchivo"`
 	Periodo          int               `xml:"periodo" json:"periodo"`
 }
 
