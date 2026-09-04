@@ -79,11 +79,16 @@ type SolicitudRecepcionCompras struct {
 	CantidadFacturas int               `xml:"cantidadFacturas" json:"cantidadFacturas"`
 	FechaEnvio       datatype.TimeSiat `xml:"fechaEnvio" json:"fechaEnvio"`
 	Gestion          int               `xml:"gestion" json:"gestion"`
-	// El nombre del elemento es "hash", no "hashArchivo" — la doc oficial del SIN
-	// ("Recepción Paquete Compras") lo lista así, y con el tag equivocado el SIAT
-	// devuelve un genérico "[-1] Error inesperado" HTTP 200 en vez de un rechazo de
-	// validación: recibe el paquete, pero el hash no llega bajo el nombre que espera.
-	HashArchivo      string            `xml:"hash" json:"hashArchivo"`
+	// REVERTIDO (2026-09-04): se había cambiado a "hash" creyendo que la doc scrapeada
+	// de docs/content/Recepción Paquete Compras.md primaba sobre el nombre que ya
+	// tenía el código. Estaba al revés — el propio SIAT lo desmiente: con "hash" el
+	// fault de vuelta es "Unmarshalling Error: unexpected element (local:\"hash\").
+	// Expected elements are [...] hashArchivo [...]", un fault de PARSEO XML antes
+	// de llegar a validar nada, peor que el "[-1] Error inesperado" original. El
+	// código base ya tenía el nombre correcto; el "[-1]" tiene otra causa, sin
+	// diagnosticar todavía. No confiar en la doc scrapeada por sobre lo que el
+	// propio servidor devuelve cuando contradicen — el XSD real manda.
+	HashArchivo      string            `xml:"hashArchivo" json:"hashArchivo"`
 	Periodo          int               `xml:"periodo" json:"periodo"`
 }
 
