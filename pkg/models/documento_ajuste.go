@@ -220,6 +220,20 @@ type reversionAnulacionDocumentoAjusteBuilder struct {
 	request *documento_ajuste.ReversionAnulacionDocumentoAjuste
 }
 
+// Mismo agujero que tenía la anulación de ajuste (ver WithCodigoModalidad de
+// anulacionDocumentoAjusteBuilder): injectFields solo inyecta Nit, CodigoSistema y
+// CodigoAmbiente, así que sin este setter la reversión de nota de crédito/débito viajaba
+// con codigoModalidad=0 — y el XSD lo declara obligatorio (solicitudRecepcion, sin
+// minOccurs). El SIAT responde "SERVICIO NO DISPONIBLE: Para la modalidad 0 y/o sector 24",
+// que parece una operación no soportada pero es nuestro campo en cero.
+//
+// Visto real el 23-sep-2026: 250 reversiones del rubro 24 fallaron así, con la Etapa XI
+// del panel clavada en 80% porque sus casos 9 y 10 son justamente NCD.
+func (b *reversionAnulacionDocumentoAjusteBuilder) WithCodigoModalidad(v int) *reversionAnulacionDocumentoAjusteBuilder {
+	b.request.SolicitudServicioReversionAnulacionDocumentoAjuste.CodigoModalidad = v
+	return b
+}
+
 func (b *reversionAnulacionDocumentoAjusteBuilder) WithCodigoDocumentoSector(v int) *reversionAnulacionDocumentoAjusteBuilder {
 	b.request.SolicitudServicioReversionAnulacionDocumentoAjuste.CodigoDocumentoSector = v
 	return b
@@ -266,6 +280,15 @@ func (b *reversionAnulacionDocumentoAjusteBuilder) Build() ReversionAnulacionDoc
 
 type verificacionEstadoDocumentoAjusteBuilder struct {
 	request *documento_ajuste.VerificacionEstadoDocumentoAjuste
+}
+
+// La cuarta operación del grupo con el mismo agujero. No se le atribuye ninguna falla
+// observada —la verificación de estado del rubro 24 no se ejercitó todavía— pero el campo
+// es obligatorio en el XSD y las otras tres ya lo pasan: dejarla afuera es repetir por
+// cuarta vez el patrón de arreglar una rama y olvidar a sus hermanas.
+func (b *verificacionEstadoDocumentoAjusteBuilder) WithCodigoModalidad(v int) *verificacionEstadoDocumentoAjusteBuilder {
+	b.request.SolicitudServicioVerificacionEstado.CodigoModalidad = v
+	return b
 }
 
 func (b *verificacionEstadoDocumentoAjusteBuilder) WithCodigoDocumentoSector(v int) *verificacionEstadoDocumentoAjusteBuilder {
