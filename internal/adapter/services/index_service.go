@@ -89,9 +89,20 @@ func parseSoapResponse[T any](resp *http.Response) (*soap.EnvelopeResponse[T], e
 	// gateway o del portal. Detectarlo acá da un mensaje que nombra la causa, en vez del
 	// confuso "expected element type <Envelope> but have <html>" que salía al intentar
 	// parsear un HTML como XML.
+	//
+	// Cuando sí trae un sobre SOAP con Fault (el SIAT contesta así sus propios errores, con
+	// HTTP 500), el mensaje lleva su faultstring. Antes se descartaba y el log solo decía
+	// "HTTP 500 en vez de un sobre SOAP": el 2026-10-08 el piloto estuvo horas contestando
+	// «Could not acquire a connection from DataSource» (su base caída) y para verlo hubo que
+	// prender el volcado del tráfico. La clasificación no cambia: sigue siendo de red y
+	// reintentable, salvo 401/403.
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		msg := fmt.Sprintf("el SIAT respondió HTTP %d (%s) en vez de un sobre SOAP",
 			resp.StatusCode, http.StatusText(resp.StatusCode))
+		if fault := faultDe(body); fault != "" {
+			msg = fmt.Sprintf("el SIAT respondió HTTP %d (%s) con el error SOAP «%s»",
+				resp.StatusCode, http.StatusText(resp.StatusCode), truncar([]byte(fault), 300))
+		}
 		// 401/403 no se arreglan reintentando: hace falta renovar credenciales.
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 			return nil, siatErrors.NewAuthError(msg)
@@ -110,6 +121,16 @@ func parseSoapResponse[T any](resp *http.Response) (*soap.EnvelopeResponse[T], e
 	}
 
 	return &result, nil
+}
+
+// faultDe devuelve el faultstring si el cuerpo es un sobre SOAP con Fault, o "" si no lo es
+// (una página HTML del gateway, un cuerpo vacío o un sobre sin Fault).
+func faultDe(body []byte) string {
+	var sobre soap.EnvelopeResponse[struct{}]
+	if err := xml.Unmarshal(body, &sobre); err != nil || sobre.Body.Fault == nil {
+		return ""
+	}
+	return strings.TrimSpace(sobre.Body.Fault.FaultString)
 }
 
 // truncar acota el cuerpo que se adjunta al error: alcanza para reconocer si vino una página

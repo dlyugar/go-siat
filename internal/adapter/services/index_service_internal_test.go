@@ -92,6 +92,83 @@ func TestParseSoapResponse_ElRechazoDeAutenticacionNoEsReintentable(t *testing.T
 	}
 }
 
+// Las dos respuestas reales del piloto del SIN del 2026-10-08, tal como llegaron: HTTP 500 con un
+// sobre SOAP cuyo faultstring dice la causa. Antes el mensaje decía solo "HTTP 500 en vez de un
+// sobre SOAP" y la causa no aparecía en ningún log.
+const (
+	faultBaseCaida = `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><soap:Fault>` +
+		`<faultcode>soap:Server</faultcode><faultstring>Could not acquire a connection from DataSource - The connection attempt failed.</faultstring>` +
+		`</soap:Fault></soap:Body></soap:Envelope>`
+	faultApiKey = `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><soap:Fault>` +
+		`<faultcode>soap:Server</faultcode><faultstring>API KEY NO VALIDO</faultstring></soap:Fault></soap:Body></soap:Envelope>`
+)
+
+func TestParseSoapResponse_ElFaultDelSiatQuedaEnElMensaje(t *testing.T) {
+	casos := []struct {
+		cuerpo, esperado string
+	}{
+		{faultBaseCaida, "Could not acquire a connection from DataSource - The connection attempt failed."},
+		{faultApiKey, "API KEY NO VALIDO"},
+	}
+	for _, c := range casos {
+		_, err := parseSoapResponse[contenidoCualquiera](respuesta(http.StatusInternalServerError, c.cuerpo))
+		if err == nil {
+			t.Fatalf("%q: se esperaba un error", c.esperado)
+		}
+		if !strings.Contains(err.Error(), c.esperado) {
+			t.Errorf("el mensaje tiene que llevar el faultstring %q; salió: %v", c.esperado, err)
+		}
+		if !strings.Contains(err.Error(), "500") {
+			t.Errorf("el mensaje tiene que seguir nombrando el status HTTP; salió: %v", err)
+		}
+		if strings.Contains(err.Error(), "en vez de un sobre SOAP") {
+			t.Errorf("trajo un sobre SOAP: el mensaje no puede decir que no; salió: %v", err)
+		}
+		// La clasificación no cambia: el backend decide contingencia y reintentos con esto.
+		if !siatErrors.IsRetryable(err) || !siatErrors.IsNetworkError(err) {
+			t.Errorf("un 500 con Fault sigue siendo de red y reintentable; salió: %v", err)
+		}
+	}
+}
+
+// El Fault también se nombra en un 401/403, que sigue sin ser reintentable.
+func TestParseSoapResponse_ElFaultDeUnRechazoDeAutenticacionSeNombra(t *testing.T) {
+	_, err := parseSoapResponse[contenidoCualquiera](respuesta(http.StatusUnauthorized, faultApiKey))
+	if err == nil {
+		t.Fatal("se esperaba un error")
+	}
+	if !strings.Contains(err.Error(), "API KEY NO VALIDO") {
+		t.Errorf("el mensaje tiene que llevar el faultstring; salió: %v", err)
+	}
+	if siatErrors.IsRetryable(err) {
+		t.Errorf("un 401 no tiene que ser reintentable; salió: %v", err)
+	}
+}
+
+// Sin sobre SOAP (la página HTML del gateway) el mensaje queda como antes.
+func TestParseSoapResponse_SinSobreElMensajeNoCambia(t *testing.T) {
+	for _, cuerpo := range []string{"<html><body>502 Bad Gateway</body></html>", "", "no es xml"} {
+		_, err := parseSoapResponse[contenidoCualquiera](respuesta(http.StatusBadGateway, cuerpo))
+		if err == nil || !strings.Contains(err.Error(), "en vez de un sobre SOAP") {
+			t.Errorf("cuerpo %q: se esperaba el mensaje de siempre; salió: %v", cuerpo, err)
+		}
+	}
+}
+
+// Un faultstring enorme no inunda el log: se acota.
+func TestParseSoapResponse_UnFaultLargoSeAcota(t *testing.T) {
+	largo := strings.Repeat("x", 5000)
+	cuerpo := `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><soap:Fault>` +
+		`<faultcode>soap:Server</faultcode><faultstring>` + largo + `</faultstring></soap:Fault></soap:Body></soap:Envelope>`
+	_, err := parseSoapResponse[contenidoCualquiera](respuesta(http.StatusInternalServerError, cuerpo))
+	if err == nil {
+		t.Fatal("se esperaba un error")
+	}
+	if len(err.Error()) > 500 {
+		t.Errorf("el mensaje tiene que quedar acotado; mide %d caracteres", len(err.Error()))
+	}
+}
+
 // La ruta feliz no cambia.
 func TestParseSoapResponse_SobreValidoSeParsea(t *testing.T) {
 	xmlOk := `<?xml version="1.0"?>
